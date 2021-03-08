@@ -1,0 +1,26 @@
+target/
+out/
+boot/
+lib_managed/
+src_managed/
+project/plugins/project/
+src/twirl-gen/
+.idea/
+*.log
+tracking-log.json
+.de-otto-tracking-mvn--repo_s3credentials
+jvm-deploy-blueprint/
+.editorconfig
+.metals
+.bloop
+project/metals.sbt
+.env
+.bsp/
+ 
+#conventional commits
+conventionalcommit.json
+conventionalcommit.coauthors
+
+javaagent
+/overrides/
+/jvm-deploy-blueprint/
