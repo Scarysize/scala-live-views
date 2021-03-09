@@ -10,6 +10,10 @@ val akka = Seq(
   "com.typesafe.akka" %% "akka-stream" % "2.6.8",
   "com.typesafe.akka" %% "akka-http" % "10.2.4"
 )
+val jsoniter = Seq(
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core"   % "2.6.4",
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.6.4"
+)
 
 lazy val root = (project in file("."))
   .settings(
@@ -17,5 +21,5 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
       "com.lihaoyi" %% "scalatags" % "0.8.2",
       "org.scalatest" %% "scalatest" % "latest.integration" % "test"
-    ) ++ akka
+    ) ++ akka ++ jsoniter
   )

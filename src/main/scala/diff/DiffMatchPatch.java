@@ -16,11 +16,12 @@
  * limitations under the License.
  */
 
-package core;
+package diff;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,7 +38,7 @@ import java.util.regex.Pattern;
  * Class containing the diff, match and patch methods.
  * Also contains the behaviour settings.
  */
-public class DiffMatchPatch {
+class DiffMatchPatch {
 
     // Defaults.
     // Set these on your diff_match_patch instance to override the defaults.
@@ -75,37 +76,36 @@ public class DiffMatchPatch {
     /**
      * The number of bits in an int.
      */
-    private short Match_MaxBits = 32;
-
-    /**
-     * Internal class for returning results from diff_linesToChars().
-     * Other less paranoid languages just use a three-element array.
-     */
-    protected static class LinesToCharsResult {
-        protected String chars1;
-        protected String chars2;
-        protected List<String> lineArray;
-
-        protected LinesToCharsResult(String chars1, String chars2,
-                                     List<String> lineArray) {
-            this.chars1 = chars1;
-            this.chars2 = chars2;
-            this.lineArray = lineArray;
-        }
-    }
+    private final short Match_MaxBits = 32;
+    // Define some regex patterns for matching boundaries.
+    private final Pattern BLANKLINEEND
+            = Pattern.compile("\\n\\r?\\n\\Z", Pattern.DOTALL);
 
 
     //  DIFF FUNCTIONS
-
+    private final Pattern BLANKLINESTART
+            = Pattern.compile("\\A\\r?\\n\\r?\\n", Pattern.DOTALL);
 
     /**
-     * The data structure representing a diff is a Linked list of Diff objects:
-     * {Diff(Operation.DELETE, "Hello"), Diff(Operation.INSERT, "Goodbye"),
-     *  Diff(Operation.EQUAL, " world.")}
-     * which means: delete "Hello", add "Goodbye" and keep " world."
+     * Unescape selected chars for compatability with JavaScript's encodeURI.
+     * In speed critical applications this could be dropped since the
+     * receiving application will certainly decode these fine.
+     * Note that this function is case-sensitive.  Thus "%3f" would not be
+     * unescaped.  But this is ok because it is only called with the output of
+     * URLEncoder.encode which returns uppercase hex.
+     * <p>
+     * Example: "%3F" -> "?", "%24" -> "$", etc.
+     *
+     * @param str The string to escape.
+     * @return The escaped string.
      */
-    public enum Operation {
-        DELETE, INSERT, EQUAL
+    private static String unescapeForEncodeUriCompatability(String str) {
+        return str.replace("%21", "!").replace("%7E", "~")
+                .replace("%27", "'").replace("%28", "(").replace("%29", ")")
+                .replace("%3B", ";").replace("%2F", "/").replace("%3F", "?")
+                .replace("%3A", ":").replace("%40", "@").replace("%26", "&")
+                .replace("%3D", "=").replace("%2B", "+").replace("%24", "$")
+                .replace("%2C", ",").replace("%23", "#");
     }
 
     /**
@@ -113,6 +113,7 @@ public class DiffMatchPatch {
      * Run a faster, slightly less optimal diff.
      * This method allows the 'checklines' of diff_main() to be optional.
      * Most of the time checklines is wanted, so default to true.
+     *
      * @param text1 Old string to be diffed.
      * @param text2 New string to be diffed.
      * @return Linked List of Diff objects.
@@ -123,11 +124,12 @@ public class DiffMatchPatch {
 
     /**
      * Find the differences between two texts.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
+     *
+     * @param text1      Old string to be diffed.
+     * @param text2      New string to be diffed.
      * @param checklines Speedup flag.  If false, then don't run a
-     *     line-level diff first to identify the changed areas.
-     *     If true, then run a faster slightly less optimal diff.
+     *                   line-level diff first to identify the changed areas.
+     *                   If true, then run a faster slightly less optimal diff.
      * @return Linked List of Diff objects.
      */
     public LinkedList<Diff> diff_main(String text1, String text2,
@@ -145,13 +147,14 @@ public class DiffMatchPatch {
     /**
      * Find the differences between two texts.  Simplifies the problem by
      * stripping any common prefix or suffix off the texts before diffing.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
+     *
+     * @param text1      Old string to be diffed.
+     * @param text2      New string to be diffed.
      * @param checklines Speedup flag.  If false, then don't run a
-     *     line-level diff first to identify the changed areas.
-     *     If true, then run a faster slightly less optimal diff.
-     * @param deadline Time when the diff should be complete by.  Used
-     *     internally for recursive calls.  Users should set DiffTimeout instead.
+     *                   line-level diff first to identify the changed areas.
+     *                   If true, then run a faster slightly less optimal diff.
+     * @param deadline   Time when the diff should be complete by.  Used
+     *                   internally for recursive calls.  Users should set DiffTimeout instead.
      * @return Linked List of Diff objects.
      */
     private LinkedList<Diff> diff_main(String text1, String text2,
@@ -201,12 +204,13 @@ public class DiffMatchPatch {
     /**
      * Find the differences between two texts.  Assumes that the texts do not
      * have any common prefix or suffix.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
+     *
+     * @param text1      Old string to be diffed.
+     * @param text2      New string to be diffed.
      * @param checklines Speedup flag.  If false, then don't run a
-     *     line-level diff first to identify the changed areas.
-     *     If true, then run a faster slightly less optimal diff.
-     * @param deadline Time when the diff should be complete by.
+     *                   line-level diff first to identify the changed areas.
+     *                   If true, then run a faster slightly less optimal diff.
+     * @param deadline   Time when the diff should be complete by.
      * @return Linked List of Diff objects.
      */
     private LinkedList<Diff> diff_compute(String text1, String text2,
@@ -278,8 +282,9 @@ public class DiffMatchPatch {
      * Do a quick line-level diff on both strings, then rediff the parts for
      * greater accuracy.
      * This speedup can produce non-minimal diffs.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
+     *
+     * @param text1    Old string to be diffed.
+     * @param text2    New string to be diffed.
      * @param deadline Time when the diff should be complete by.
      * @return Linked List of Diff objects.
      */
@@ -348,8 +353,9 @@ public class DiffMatchPatch {
      * Find the 'middle snake' of a diff, split the problem in two
      * and return the recursively constructed diff.
      * See Myers 1986 paper: An O(ND) Difference Algorithm and Its Variations.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
+     *
+     * @param text1    Old string to be diffed.
+     * @param text2    New string to be diffed.
      * @param deadline Time at which to bail if not yet complete.
      * @return LinkedList of Diff objects.
      */
@@ -469,10 +475,11 @@ public class DiffMatchPatch {
     /**
      * Given the location of the 'middle snake', split the diff in two parts
      * and recurse.
-     * @param text1 Old string to be diffed.
-     * @param text2 New string to be diffed.
-     * @param x Index of split point in text1.
-     * @param y Index of split point in text2.
+     *
+     * @param text1    Old string to be diffed.
+     * @param text2    New string to be diffed.
+     * @param x        Index of split point in text1.
+     * @param y        Index of split point in text2.
      * @param deadline Time at which to bail if not yet complete.
      * @return LinkedList of Diff objects.
      */
@@ -494,11 +501,12 @@ public class DiffMatchPatch {
     /**
      * Split two texts into a list of strings.  Reduce the texts to a string of
      * hashes where each Unicode character represents one line.
+     *
      * @param text1 First string.
      * @param text2 Second string.
      * @return An object containing the encoded text1, the encoded text2 and
-     *     the List of unique strings.  The zeroth element of the List of
-     *     unique strings is intentionally blank.
+     * the List of unique strings.  The zeroth element of the List of
+     * unique strings is intentionally blank.
      */
     protected LinesToCharsResult diff_linesToChars(String text1, String text2) {
         List<String> lineArray = new ArrayList<String>();
@@ -519,10 +527,11 @@ public class DiffMatchPatch {
     /**
      * Split a text into a list of strings.  Reduce the texts to a string of
      * hashes where each Unicode character represents one line.
-     * @param text String to encode.
+     *
+     * @param text      String to encode.
      * @param lineArray List of unique strings.
-     * @param lineHash Map of strings to indices.
-     * @param maxLines Maximum length of lineArray.
+     * @param lineHash  Map of strings to indices.
+     * @param maxLines  Maximum length of lineArray.
      * @return Encoded string.
      */
     private String diff_linesToCharsMunge(String text, List<String> lineArray,
@@ -542,7 +551,7 @@ public class DiffMatchPatch {
             line = text.substring(lineStart, lineEnd + 1);
 
             if (lineHash.containsKey(line)) {
-                chars.append(String.valueOf((char) (int) lineHash.get(line)));
+                chars.append((char) (int) lineHash.get(line));
             } else {
                 if (lineArray.size() == maxLines) {
                     // Bail out at 65535 because
@@ -552,7 +561,7 @@ public class DiffMatchPatch {
                 }
                 lineArray.add(line);
                 lineHash.put(line, lineArray.size() - 1);
-                chars.append(String.valueOf((char) (lineArray.size() - 1)));
+                chars.append((char) (lineArray.size() - 1));
             }
             lineStart = lineEnd + 1;
         }
@@ -562,7 +571,8 @@ public class DiffMatchPatch {
     /**
      * Rehydrate the text in a diff from a string of line hashes to real lines of
      * text.
-     * @param diffs List of Diff objects.
+     *
+     * @param diffs     List of Diff objects.
      * @param lineArray List of unique strings.
      */
     protected void diff_charsToLines(List<Diff> diffs,
@@ -579,6 +589,7 @@ public class DiffMatchPatch {
 
     /**
      * Determine the common prefix of two strings
+     *
      * @param text1 First string.
      * @param text2 Second string.
      * @return The number of characters common to the start of each string.
@@ -596,6 +607,7 @@ public class DiffMatchPatch {
 
     /**
      * Determine the common suffix of two strings
+     *
      * @param text1 First string.
      * @param text2 Second string.
      * @return The number of characters common to the end of each string.
@@ -615,10 +627,11 @@ public class DiffMatchPatch {
 
     /**
      * Determine if the suffix of one string is the prefix of another.
+     *
      * @param text1 First string.
      * @param text2 Second string.
      * @return The number of characters common to the end of the first
-     *     string and the start of the second string.
+     * string and the start of the second string.
      */
     protected int diff_commonOverlap(String text1, String text2) {
         // Cache the text lengths to prevent multiple calls.
@@ -664,11 +677,12 @@ public class DiffMatchPatch {
      * Do the two texts share a substring which is at least half the length of
      * the longer text?
      * This speedup can produce non-minimal diffs.
+     *
      * @param text1 First string.
      * @param text2 Second string.
      * @return Five element String array, containing the prefix of text1, the
-     *     suffix of text1, the prefix of text2, the suffix of text2 and the
-     *     common middle.  Or null if there was no match.
+     * suffix of text1, the prefix of text2, the suffix of text2 and the
+     * common middle.  Or null if there was no match.
      */
     protected String[] diff_halfMatch(String text1, String text2) {
         if (Diff_Timeout <= 0) {
@@ -711,12 +725,13 @@ public class DiffMatchPatch {
     /**
      * Does a substring of shorttext exist within longtext such that the
      * substring is at least half the length of longtext?
-     * @param longtext Longer string.
+     *
+     * @param longtext  Longer string.
      * @param shorttext Shorter string.
-     * @param i Start index of quarter length substring within longtext.
+     * @param i         Start index of quarter length substring within longtext.
      * @return Five element String array, containing the prefix of longtext, the
-     *     suffix of longtext, the prefix of shorttext, the suffix of shorttext
-     *     and the common middle.  Or null if there was no match.
+     * suffix of longtext, the prefix of shorttext, the suffix of shorttext
+     * and the common middle.  Or null if there was no match.
      */
     private String[] diff_halfMatchI(String longtext, String shorttext, int i) {
         // Start with a 1/4 length substring at position i as a seed.
@@ -749,6 +764,7 @@ public class DiffMatchPatch {
 
     /**
      * Reduce the number of edits by eliminating semantically trivial equalities.
+     *
      * @param diffs LinkedList of Diff objects.
      */
     public void diff_cleanupSemantic(LinkedList<Diff> diffs) {
@@ -898,6 +914,7 @@ public class DiffMatchPatch {
      * Look for single edits surrounded on both sides by equalities
      * which can be shifted sideways to align the edit to a word boundary.
      * e.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
+     *
      * @param diffs LinkedList of Diff objects.
      */
     public void diff_cleanupSemanticLossless(LinkedList<Diff> diffs) {
@@ -983,6 +1000,7 @@ public class DiffMatchPatch {
      * Given two strings, compute a score representing whether the internal
      * boundary falls on logical boundaries.
      * Scores range from 6 (best) to 0 (worst).
+     *
      * @param one First string.
      * @param two Second string.
      * @return The score.
@@ -1030,14 +1048,9 @@ public class DiffMatchPatch {
         return 0;
     }
 
-    // Define some regex patterns for matching boundaries.
-    private Pattern BLANKLINEEND
-            = Pattern.compile("\\n\\r?\\n\\Z", Pattern.DOTALL);
-    private Pattern BLANKLINESTART
-            = Pattern.compile("\\A\\r?\\n\\r?\\n", Pattern.DOTALL);
-
     /**
      * Reduce the number of edits by eliminating operationally trivial equalities.
+     *
      * @param diffs LinkedList of Diff objects.
      */
     public void diff_cleanupEfficiency(LinkedList<Diff> diffs) {
@@ -1146,6 +1159,7 @@ public class DiffMatchPatch {
     /**
      * Reorder and merge like edit sections.  Merge equalities.
      * Any edit section can move as long as it doesn't cross an equality.
+     *
      * @param diffs LinkedList of Diff objects.
      */
     public void diff_cleanupMerge(LinkedList<Diff> diffs) {
@@ -1297,8 +1311,9 @@ public class DiffMatchPatch {
      * loc is a location in text1, compute and return the equivalent location in
      * text2.
      * e.g. "The cat" vs "The big cat", 1->1, 5->8
+     *
      * @param diffs List of Diff objects.
-     * @param loc Location within text1.
+     * @param loc   Location within text1.
      * @return Location within text2.
      */
     public int diff_xIndex(List<Diff> diffs, int loc) {
@@ -1334,6 +1349,7 @@ public class DiffMatchPatch {
 
     /**
      * Convert a Diff list into a pretty HTML report.
+     *
      * @param diffs List of Diff objects.
      * @return HTML representation.
      */
@@ -1361,6 +1377,7 @@ public class DiffMatchPatch {
 
     /**
      * Compute and return the source text (all equalities and deletions).
+     *
      * @param diffs List of Diff objects.
      * @return Source text.
      */
@@ -1376,6 +1393,7 @@ public class DiffMatchPatch {
 
     /**
      * Compute and return the destination text (all equalities and insertions).
+     *
      * @param diffs List of Diff objects.
      * @return Destination text.
      */
@@ -1392,6 +1410,7 @@ public class DiffMatchPatch {
     /**
      * Compute the Levenshtein distance; the number of inserted, deleted or
      * substituted characters.
+     *
      * @param diffs List of Diff objects.
      * @return Number of changes.
      */
@@ -1424,6 +1443,7 @@ public class DiffMatchPatch {
      * required to transform text1 into text2.
      * E.g. =3\t-2\t+ing  -> Keep 3 chars, delete 2 chars, insert 'ing'.
      * Operations are tab-separated.  Inserted text is escaped using %xx notation.
+     *
      * @param diffs List of Diff objects.
      * @return Delta text.
      */
@@ -1432,13 +1452,8 @@ public class DiffMatchPatch {
         for (Diff aDiff : diffs) {
             switch (aDiff.operation) {
                 case INSERT:
-                    try {
-                        text.append("+").append(URLEncoder.encode(aDiff.text, "UTF-8")
+                    text.append("+").append(URLEncoder.encode(aDiff.text, StandardCharsets.UTF_8)
                                 .replace('+', ' ')).append("\t");
-                    } catch (UnsupportedEncodingException e) {
-                        // Not likely on modern system.
-                        throw new Error("This system does not support UTF-8.", e);
-                    }
                     break;
                 case DELETE:
                     text.append("-").append(aDiff.text.length()).append("\t");
@@ -1460,6 +1475,7 @@ public class DiffMatchPatch {
     /**
      * Given the original text1, and an encoded string which describes the
      * operations required to transform text1 into text2, compute the full diff.
+     *
      * @param text1 Source string for the diff.
      * @param delta Delta text.
      * @return Array of Diff objects or null if invalid.
@@ -1483,10 +1499,7 @@ public class DiffMatchPatch {
                     // decode would change all "+" to " "
                     param = param.replace("+", "%2B");
                     try {
-                        param = URLDecoder.decode(param, "UTF-8");
-                    } catch (UnsupportedEncodingException e) {
-                        // Not likely on modern system.
-                        throw new Error("This system does not support UTF-8.", e);
+                        param = URLDecoder.decode(param, StandardCharsets.UTF_8);
                     } catch (IllegalArgumentException e) {
                         // Malformed URI sequence.
                         throw new IllegalArgumentException(
@@ -1535,16 +1548,13 @@ public class DiffMatchPatch {
         return diffs;
     }
 
-
-    //  MATCH FUNCTIONS
-
-
     /**
      * Locate the best instance of 'pattern' in 'text' near 'loc'.
      * Returns -1 if no match found.
-     * @param text The text to search.
+     *
+     * @param text    The text to search.
      * @param pattern The pattern to search for.
-     * @param loc The location to search around.
+     * @param loc     The location to search around.
      * @return Best match index or -1.
      */
     public int match_main(String text, String pattern, int loc) {
@@ -1561,7 +1571,7 @@ public class DiffMatchPatch {
             // Nothing to match.
             return -1;
         } else if (loc + pattern.length() <= text.length()
-                && text.substring(loc, loc + pattern.length()).equals(pattern)) {
+                && text.startsWith(pattern, loc)) {
             // Perfect match at the perfect spot!  (Includes case of null pattern)
             return loc;
         } else {
@@ -1570,12 +1580,16 @@ public class DiffMatchPatch {
         }
     }
 
+
+    //  MATCH FUNCTIONS
+
     /**
      * Locate the best instance of 'pattern' in 'text' near 'loc' using the
      * Bitap algorithm.  Returns -1 if no match found.
-     * @param text The text to search.
+     *
+     * @param text    The text to search.
      * @param pattern The pattern to search for.
-     * @param loc The location to search around.
+     * @param loc     The location to search around.
      * @return Best match index or -1.
      */
     protected int match_bitap(String text, String pattern, int loc) {
@@ -1675,9 +1689,10 @@ public class DiffMatchPatch {
 
     /**
      * Compute and return the score for a match with e errors and x location.
-     * @param e Number of errors in match.
-     * @param x Location of match.
-     * @param loc Expected location of match.
+     *
+     * @param e       Number of errors in match.
+     * @param x       Location of match.
+     * @param loc     Expected location of match.
      * @param pattern Pattern being sought.
      * @return Overall score for match (0.0 = good, 1.0 = bad).
      */
@@ -1693,6 +1708,7 @@ public class DiffMatchPatch {
 
     /**
      * Initialise the alphabet for the Bitap algorithm.
+     *
      * @param pattern The text to encode.
      * @return Hash of character locations.
      */
@@ -1710,15 +1726,12 @@ public class DiffMatchPatch {
         return s;
     }
 
-
-    //  PATCH FUNCTIONS
-
-
     /**
      * Increase the context until it is unique,
      * but don't let the pattern expand beyond Match_MaxBits.
+     *
      * @param patch The patch to grow.
-     * @param text Source text.
+     * @param text  Source text.
      */
     protected void patch_addContext(Patch patch, String text) {
         if (text.length() == 0) {
@@ -1759,9 +1772,13 @@ public class DiffMatchPatch {
         patch.length2 += prefix.length() + suffix.length();
     }
 
+
+    //  PATCH FUNCTIONS
+
     /**
      * Compute a list of patches to turn text1 into text2.
      * A set of diffs will be computed.
+     *
      * @param text1 Old text.
      * @param text2 New text.
      * @return LinkedList of Patch objects.
@@ -1782,6 +1799,7 @@ public class DiffMatchPatch {
     /**
      * Compute a list of patches to turn text1 into text2.
      * text1 will be derived from the provided diffs.
+     *
      * @param diffs Array of Diff objects for text1 to text2.
      * @return LinkedList of Patch objects.
      */
@@ -1797,20 +1815,23 @@ public class DiffMatchPatch {
     /**
      * Compute a list of patches to turn text1 into text2.
      * text2 is ignored, diffs are the delta between text1 and text2.
+     *
      * @param text1 Old text
      * @param text2 Ignored.
      * @param diffs Array of Diff objects for text1 to text2.
      * @return LinkedList of Patch objects.
      * @deprecated Prefer patch_make(String text1, LinkedList<Diff> diffs).
      */
-    @Deprecated public LinkedList<Patch> patch_make(String text1, String text2,
-                                                    LinkedList<Diff> diffs) {
+    @Deprecated
+    public LinkedList<Patch> patch_make(String text1, String text2,
+                                        LinkedList<Diff> diffs) {
         return patch_make(text1, diffs);
     }
 
     /**
      * Compute a list of patches to turn text1 into text2.
      * text2 is not provided, diffs are the delta between text1 and text2.
+     *
      * @param text1 Old text.
      * @param diffs Array of Diff objects for text1 to text2.
      * @return LinkedList of Patch objects.
@@ -1897,6 +1918,7 @@ public class DiffMatchPatch {
 
     /**
      * Given an array of patches, return another array that is identical.
+     *
      * @param patches Array of Patch objects.
      * @return Array of Patch objects.
      */
@@ -1920,10 +1942,11 @@ public class DiffMatchPatch {
     /**
      * Merge a set of patches onto the text.  Return a patched text, as well
      * as an array of true/false values indicating which patches were applied.
+     *
      * @param patches Array of Patch objects
-     * @param text Old text.
+     * @param text    Old text.
      * @return Two element Object array, containing the new text and an array of
-     *      boolean values.
+     * boolean values.
      */
     public Object[] patch_apply(LinkedList<Patch> patches, String text) {
         if (patches.isEmpty()) {
@@ -2031,6 +2054,7 @@ public class DiffMatchPatch {
     /**
      * Add some padding on text start and end so that edges can match something.
      * Intended to be called only from within patch_apply.
+     *
      * @param patches Array of Patch objects.
      * @return The padding string added to each side.
      */
@@ -2093,6 +2117,7 @@ public class DiffMatchPatch {
      * Look through the patches and break up any which are longer than the
      * maximum limit of the match algorithm.
      * Intended to be called only from within patch_apply.
+     *
      * @param patches LinkedList of Patch objects.
      */
     public void patch_splitMax(LinkedList<Patch> patches) {
@@ -2195,6 +2220,7 @@ public class DiffMatchPatch {
 
     /**
      * Take a list of patches and return a textual representation.
+     *
      * @param patches List of Patch objects.
      * @return Text representation of patches.
      */
@@ -2209,6 +2235,7 @@ public class DiffMatchPatch {
     /**
      * Parse a textual representation of patches and return a List of Patch
      * objects.
+     *
      * @param textline Text representation of patches.
      * @return List of Patch objects.
      * @throws IllegalArgumentException If invalid input.
@@ -2269,10 +2296,7 @@ public class DiffMatchPatch {
                 line = text.getFirst().substring(1);
                 line = line.replace("+", "%2B");  // decode would change all "+" to " "
                 try {
-                    line = URLDecoder.decode(line, "UTF-8");
-                } catch (UnsupportedEncodingException e) {
-                    // Not likely on modern system.
-                    throw new Error("This system does not support UTF-8.", e);
+                    line = URLDecoder.decode(line, StandardCharsets.UTF_8);
                 } catch (IllegalArgumentException e) {
                     // Malformed URI sequence.
                     throw new IllegalArgumentException(
@@ -2301,6 +2325,32 @@ public class DiffMatchPatch {
         return patches;
     }
 
+    /**
+     * The data structure representing a diff is a Linked list of Diff objects:
+     * {Diff(Operation.DELETE, "Hello"), Diff(Operation.INSERT, "Goodbye"),
+     * Diff(Operation.EQUAL, " world.")}
+     * which means: delete "Hello", add "Goodbye" and keep " world."
+     */
+    public enum Operation {
+        DELETE, INSERT, EQUAL
+    }
+
+    /**
+     * Internal class for returning results from diff_linesToChars().
+     * Other less paranoid languages just use a three-element array.
+     */
+    protected static class LinesToCharsResult {
+        protected String chars1;
+        protected String chars2;
+        protected List<String> lineArray;
+
+        protected LinesToCharsResult(String chars1, String chars2,
+                                     List<String> lineArray) {
+            this.chars1 = chars1;
+            this.chars2 = chars2;
+            this.lineArray = lineArray;
+        }
+    }
 
     /**
      * Class representing one diff operation.
@@ -2317,8 +2367,9 @@ public class DiffMatchPatch {
 
         /**
          * Constructor.  Initializes the diff with the provided values.
+         *
          * @param operation One of INSERT, DELETE or EQUAL.
-         * @param text The text being applied.
+         * @param text      The text being applied.
          */
         public Diff(Operation operation, String text) {
             // Construct a diff with the specified operation and text.
@@ -2328,6 +2379,7 @@ public class DiffMatchPatch {
 
         /**
          * Display a human-readable version of this Diff.
+         *
          * @return text version.
          */
         public String toString() {
@@ -2338,6 +2390,7 @@ public class DiffMatchPatch {
         /**
          * Create a numeric hash value for a Diff.
          * This function is not used by DMP.
+         *
          * @return Hash value.
          */
         @Override
@@ -2350,6 +2403,7 @@ public class DiffMatchPatch {
 
         /**
          * Is this Diff equivalent to another Diff?
+         *
          * @param obj Another Diff to compare against.
          * @return true or false.
          */
@@ -2369,16 +2423,10 @@ public class DiffMatchPatch {
                 return false;
             }
             if (text == null) {
-                if (other.text != null) {
-                    return false;
-                }
-            } else if (!text.equals(other.text)) {
-                return false;
-            }
-            return true;
+                return other.text == null;
+            } else return text.equals(other.text);
         }
     }
-
 
     /**
      * Class representing one patch operation.
@@ -2401,6 +2449,7 @@ public class DiffMatchPatch {
          * Emulate GNU diff's format.
          * Header: @@ -382,8 +481,9 @@
          * Indices are printed as 1-based, not 0-based.
+         *
          * @return The GNU diff string.
          */
         public String toString() {
@@ -2435,37 +2484,10 @@ public class DiffMatchPatch {
                         text.append(' ');
                         break;
                 }
-                try {
-                    text.append(URLEncoder.encode(aDiff.text, "UTF-8").replace('+', ' '))
+                text.append(URLEncoder.encode(aDiff.text, StandardCharsets.UTF_8).replace('+', ' '))
                             .append("\n");
-                } catch (UnsupportedEncodingException e) {
-                    // Not likely on modern system.
-                    throw new Error("This system does not support UTF-8.", e);
-                }
             }
             return unescapeForEncodeUriCompatability(text.toString());
         }
-    }
-
-    /**
-     * Unescape selected chars for compatability with JavaScript's encodeURI.
-     * In speed critical applications this could be dropped since the
-     * receiving application will certainly decode these fine.
-     * Note that this function is case-sensitive.  Thus "%3f" would not be
-     * unescaped.  But this is ok because it is only called with the output of
-     * URLEncoder.encode which returns uppercase hex.
-     *
-     * Example: "%3F" -> "?", "%24" -> "$", etc.
-     *
-     * @param str The string to escape.
-     * @return The escaped string.
-     */
-    private static String unescapeForEncodeUriCompatability(String str) {
-        return str.replace("%21", "!").replace("%7E", "~")
-                .replace("%27", "'").replace("%28", "(").replace("%29", ")")
-                .replace("%3B", ";").replace("%2F", "/").replace("%3F", "?")
-                .replace("%3A", ":").replace("%40", "@").replace("%26", "&")
-                .replace("%3D", "=").replace("%2B", "+").replace("%24", "$")
-                .replace("%2C", ",").replace("%23", "#");
     }
 }
