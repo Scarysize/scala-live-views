@@ -1,17 +1,21 @@
 package diff
 
-import view.{TextNode, HtmlNode}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import view.{HtmlNode, Node, TextNode}
 
 class ReconcileTest extends AnyWordSpec with Matchers {
+  def doc(node: Node): Node = {
+    HtmlNode("html", Map.empty, Seq(node))
+  }
+
   "Reconcile.diff" should {
     "detect text changes" in {
-      val change :: Nil =
-        Reconcile.diff(TextNode("hello eric"), TextNode("hallo erik"))
-      change shouldBe a[TextChange]
-      change.baseIndex shouldBe "0"
-      change.sourceIndex shouldBe "0"
+      val change :: Nil = Reconcile
+        .diff(doc(TextNode("hello eric")), doc(TextNode("hallo erik")))
+        .toList
+      val txtChange = change.asInstanceOf[TextChange]
+      txtChange.path shouldBe "0>0"
     }
   }
 
@@ -32,9 +36,10 @@ class ReconcileTest extends AnyWordSpec with Matchers {
         HtmlNode("p", Map.empty, Seq(TextNode("text")))
       )
     )
-    val change :: Nil = Reconcile.diff(source, base)
-    change shouldBe a[TextChange]
-    change.baseIndex shouldBe "0>1>0"
-    change.sourceIndex shouldBe "0>1>0"
+    val change :: Nil = Reconcile.diff(source, base).toList
+    val txtChange = change.asInstanceOf[TextChange]
+
+    txtChange.patch.map(_.text) shouldBe List("te", "s", "x", "t")
+    txtChange.path shouldBe "0>1>0"
   }
 }

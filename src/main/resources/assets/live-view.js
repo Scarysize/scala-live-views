@@ -8,12 +8,12 @@ eventSource.addEventListener('change', event => {
 });
 
 
-function apply(changes, base) {
+function apply(changes, root) {
     console.log('applying changes...');
 
     for (const change of changes) {
         console.log(change);
-        const node = findChildAtIndex(base, change.baseIndex);
+        const node = findChildAtIndex(root, change.path);
         patchText(change, node.node);
     }
 
@@ -39,18 +39,18 @@ function patchText(change, textNode) {
     textNode.textContent = newString;
 }
 
-function findChildAtIndex(node, index) {
-    if (!index || !node.childNodes || node.childNodes.length === 0) {
+function findChildAtIndex(root, path) {
+    if (!path || !root.childNodes || root.childNodes.length === 0) {
         return null;
     }
 
-    const indices = index.split('>');
+    const indices = path.split('>');
     let found = true;
     let lastParentIndex = '';
     for (let i = 1; i < indices.length; i++) {
         const nodeIndex = parseInt(indices[i], 10);
-        if (node.childNodes && node.childNodes.length > nodeIndex) {
-            node = node.childNodes[nodeIndex];
+        if (root.childNodes && root.childNodes.length > nodeIndex) {
+            root = root.childNodes[nodeIndex];
         } else {
             lastParentIndex = indices.slice(0, i - 1).join('>');
             found = false;
@@ -59,9 +59,9 @@ function findChildAtIndex(node, index) {
     }
 
     return {
-        lastParent: found ? node.parentNode : node,
-        lastParentIndex: found ? index.slice(0, index.lastIndexOf('>')) : lastParentIndex,
-        node: found ? node : null,
+        lastParent: found ? root.parentNode : root,
+        lastParentIndex: found ? path.slice(0, path.lastIndexOf('>')) : lastParentIndex,
+        node: found ? root : null,
         found: found
     };
 }

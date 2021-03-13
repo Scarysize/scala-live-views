@@ -7,13 +7,17 @@ sealed trait Node {
 }
 
 case class HtmlNode(
-                     tag: String,
-                     attributes: Map[String, String],
-                     childNodes: Seq[Node]
-                   ) extends Node
+    tag: String,
+    attributes: Map[String, String],
+    childNodes: Seq[Node]
+) extends Node {
+  override def toString: String = s"<$tag>[${childNodes.length}]<$tag/>"
+}
 
 case class TextNode(textContent: String) extends Node {
   override val childNodes: Seq[Node] = Seq.empty
+
+  override def toString: String = s"txt(${textContent.take(5)})"
 }
 
 object Node {

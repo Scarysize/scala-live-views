@@ -6,6 +6,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 class StringDiffText extends AnyWordSpec with Matchers {
   "StringDiff.diff" should {
+    "return no diffs if the strings are equal" in {
+      StringDiff.diff("foo", "foo") shouldBe empty
+    }
+
     "calculate the diff of two strings" in {
       val diffs = StringDiff.diff("hello eric", "hallo erik")
       diffs shouldBe List(

@@ -3,8 +3,6 @@ package core
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
-import scalatags.Text.all._
-
 
 object Main {
   def main(args: Array[String]): Unit = {

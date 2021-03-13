@@ -15,6 +15,12 @@ import view._
 
 import scala.concurrent.duration._
 
+// TODO
+trait LiveView[T] {
+  def setState(t: T): Unit
+  def render(): Text.TypedTag[String]
+}
+
 trait ScalaTagsMarshalling {
   implicit val toStringMarshaller: ToEntityMarshaller[Text.TypedTag[String]] =
     Marshaller
@@ -26,25 +32,26 @@ trait ScalaTagsMarshalling {
 class LiveEndpoint
     extends akka.http.scaladsl.marshalling.sse.EventStreamMarshalling
     with ScalaTagsMarshalling {
+  private var lastView = Option.empty[Text.TypedTag[String]]
+
   private val source = Source
     .fromIterator(() => Iterator.from(100, 1))
     .throttle(1, 100.millis)
     .map { tick =>
       (for {
         sourceView <- lastView
-        baseView <- Option(render(tick.toString))
+        targetView <- Option(render(tick.toString))
         source <- Node.from(sourceView)
-        base <- Node.from(baseView)
+        target <- Node.from(targetView)
       } yield {
-        lastView = Option(baseView)
-        val diff = Reconcile.diff(source, base)
+        lastView = Option(targetView)
+        val diff = Reconcile.diff(source, target)
         diff
       }).getOrElse(Seq.empty)
     }
     .map(_.collect { case t: TextChange => t })
     .map(change => ServerSentEvent(writeToString(change), "change"))
     .keepAlive(1.second, () => ServerSentEvent.heartbeat)
-  private var lastView = Option.empty[Text.TypedTag[String]]
 
   def route: Route = pathPrefix("live-demo") {
     concat(
