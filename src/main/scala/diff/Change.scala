@@ -12,6 +12,9 @@ sealed trait Change {
   val path: String
 }
 
+/** @param path The path to the text node to change.
+  * @param patch A list of text changes to apply to the text content.
+  */
 case class TextChange(
     path: String,
     patch: List[TextDiff]
@@ -19,16 +22,24 @@ case class TextChange(
   val action = "TEXT_CHANGE"
 }
 
+/** -
+  * @param path The path to the parent node the child should be appended to.
+  * @param appendix The appendix
+  */
 case class AppendChild(
     path: String,
-    nodeToInsert: Node
+    appendix: Node
 ) extends Change {
   val action = "APPEND_CHILD"
 }
 
+/** -
+  * @param path The path to the child to be replace. The parent index can be deduced.
+  * @param replacement The replacement
+  */
 case class ReplaceChild(
     path: String,
-    nodeToInsert: Node
+    replacement: Node
 ) extends Change {
   val action = "REPLACE_CHILD"
 }

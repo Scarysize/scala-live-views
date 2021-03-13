@@ -13,20 +13,20 @@ object Reconcile {
 
     for (a <- tarChs.indices) {
       breakable {
-        val curSrc = srcChs(a)
+        val curSrc = srcChs.lift(a)
         val curTar = tarChs(a)
 
-        if (curSrc == null) {
+        if (curSrc.isEmpty) {
           instructions.append(
             AppendChild(
               path = path,
-              nodeToInsert = curTar
+              appendix = curTar
             )
           )
           break
         }
 
-        instructions.appendAll(diffNode(curSrc, curTar, s"$path>${a.toString}"))
+        instructions.appendAll(diffNode(curSrc.get, curTar, s"$path>${a.toString}"))
       }
     }
 
@@ -53,8 +53,8 @@ object Reconcile {
       case None =>
         Seq(
           ReplaceChild(
-            path = "",
-            nodeToInsert = tar
+            path = path,
+            replacement = tar
           )
         )
     }
