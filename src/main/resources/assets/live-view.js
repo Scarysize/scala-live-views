@@ -1,4 +1,4 @@
-const eventSource = new EventSource("/live-demo/updates");
+const eventSource = new EventSource(location.pathname);
 
 eventSource.addEventListener('error', err => console.error(err));
 eventSource.addEventListener('open', () => console.log("update connected"));
@@ -9,17 +9,42 @@ eventSource.addEventListener('change', event => {
 
 
 function apply(changes, root) {
-    console.log('applying changes...');
+    console.log('applying changes...', changes);
 
     for (const change of changes) {
         console.log(change);
-        const node = findChildAtIndex(root, change.path);
-        patchText(change, node.node);
-    }
+        switch (change.type) {
+            case 'TextChange':
+                patchText(change, root);
+                break;
+            case 'AppendChild':
+                appendChild(change, root);
+                break;
+        }
 
+    }
 }
 
-function patchText(change, textNode) {
+function appendChild(change, root) {
+    function append(parent, nodeDef) {
+        if (nodeDef.type === 'HtmlNode') {
+            const node = document.createElement(nodeDef.tag);
+            parent.appendChild(node);
+            nodeDef.childNodes.forEach(childDef => append(node, childDef))
+        } else if (nodeDef.type === 'TextNode') {
+            const node = document.createTextNode(nodeDef.textContent);
+            parent.appendChild(node);
+        }
+    }
+
+    append(
+        findChildAtIndex(root, change.path).node,
+        change.appendix
+    );
+}
+
+function patchText(change, root) {
+    const textNode = findChildAtIndex(root, change.path).node;
     const oldString = textNode.textContent;
     let newString = '';
 

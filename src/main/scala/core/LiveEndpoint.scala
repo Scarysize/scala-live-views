@@ -1,25 +1,17 @@
 package core
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.marshalling.{Marshaller, ToEntityMarshaller}
-import akka.http.scaladsl.model.sse.ServerSentEvent
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.Source
-import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
-import diff.{Reconcile, TextChange}
+import core.LiveView.LiveViewMarshalling
 import scalatags.Text
-import scalatags.Text.all
+import scalatags.Text.{all, tags2}
 import scalatags.Text.all._
-import view._
 
-import scala.concurrent.duration._
-
-// TODO
-trait LiveView[T] {
-  def setState(t: T): Unit
-  def render(): Text.TypedTag[String]
-}
+import scala.concurrent.duration.DurationInt
 
 trait ScalaTagsMarshalling {
   implicit val toStringMarshaller: ToEntityMarshaller[Text.TypedTag[String]] =
@@ -29,58 +21,42 @@ trait ScalaTagsMarshalling {
       )
 }
 
-class LiveEndpoint
-    extends akka.http.scaladsl.marshalling.sse.EventStreamMarshalling
-    with ScalaTagsMarshalling {
-  private var lastView = Option.empty[Text.TypedTag[String]]
+class LiveEndpoint(implicit actorSystem: ActorSystem) extends LiveViewMarshalling[Seq[String]] with ScalaTagsMarshalling {
 
-  private val source = Source
-    .fromIterator(() => Iterator.from(100, 1))
-    .throttle(1, 100.millis)
-    .map { tick =>
-      (for {
-        sourceView <- lastView
-        targetView <- Option(render(tick.toString))
-        source <- Node.from(sourceView)
-        target <- Node.from(targetView)
-      } yield {
-        lastView = Option(targetView)
-        val diff = Reconcile.diff(source, target)
-        diff
-      }).getOrElse(Seq.empty)
+  // TODO: This should be instantiated for each client and then synced via state (pubsub?)
+  private val view = new LiveView[Seq[String]](Seq.empty) {
+
+    override def render(): Text.TypedTag[String] = {
+      val view = html(
+        all.head(
+          script(src := "/assets/live-view.js")
+        ),
+        body(
+          header(
+            h1("live view")
+          ),
+          tags2.main(
+            getState.map(p(_)) :_*
+          )
+        )
+      )
+      view
     }
-    .map(_.collect { case t: TextChange => t })
-    .map(change => ServerSentEvent(writeToString(change), "change"))
-    .keepAlive(1.second, () => ServerSentEvent.heartbeat)
-
-  def route: Route = pathPrefix("live-demo") {
-    concat(
-      path("updates") {
-        get {
-          complete(source)
-        }
-      },
-      pathEndOrSingleSlash {
-        get {
-          lastView = Option(render("tick"))
-          complete(lastView.get)
-        }
-      }
-    )
   }
 
-  private def render(state: String) = {
-    val view = html(
-      all.head(
-        script(src := "/assets/live-view.js")
-      ),
-      body(
-        header(
-          h1("live view")
-        ),
-        p(state)
-      )
-    )
-    view
+  private val _ = Source
+    .fromIterator(() => Iterator.from(99, 1))
+    .throttle(1, 200.millis)
+    .runForeach{ tick =>
+      val newState = view.getState.appended(tick.toString).takeRight(20)
+      view.setState(newState)
+    }
+
+  def route: Route = pathPrefix("live-demo") {
+    pathEndOrSingleSlash {
+      get {
+        complete(200, view)
+      }
+    }
   }
 }

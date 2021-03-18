@@ -1,7 +1,7 @@
 package diff
 
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
-import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
+import com.github.plokhotnyuk.jsoniter_scala.macros.{CodecMakerConfig, JsonCodecMaker}
 import diff.StringDiff.TextDiff
 import view.Node
 
@@ -52,8 +52,9 @@ case class RemoveChild(
 }
 
 object Change {
-  implicit val textChangeCodec: JsonValueCodec[TextChange] =
-    JsonCodecMaker.make[TextChange]
-  implicit val seqTextChangeCodec: JsonValueCodec[Seq[TextChange]] =
-    JsonCodecMaker.make[Seq[TextChange]]
+//  implicit val textChangeCodec: JsonValueCodec[TextChange] =
+//    JsonCodecMaker.make[TextChange]
+//  implicit val seqTextChangeCodec: JsonValueCodec[Seq[TextChange]] = JsonCodecMaker.make[Seq[TextChange]]
+  implicit val changeCodec: JsonValueCodec[Change] = JsonCodecMaker.make[Change](CodecMakerConfig.withAllowRecursiveTypes(true).withTransientEmpty(true))
+  implicit val seqChangeCodec: JsonValueCodec[Seq[Change]] = JsonCodecMaker.make[Seq[Change]]
 }

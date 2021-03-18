@@ -1,8 +1,9 @@
-package core
+package demo
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
+import core.LiveEndpoint
 
 object Main {
   def main(args: Array[String]): Unit = {

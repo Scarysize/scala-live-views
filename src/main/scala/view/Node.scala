@@ -11,7 +11,7 @@ case class HtmlNode(
     attributes: Map[String, String],
     childNodes: Seq[Node]
 ) extends Node {
-  override def toString: String = s"<$tag>[${childNodes.length}]<$tag/>"
+  override def toString: String = s"<$tag>${childNodes.map(_.toString).mkString("")}<$tag/>"
 }
 
 case class TextNode(textContent: String) extends Node {

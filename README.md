@@ -16,7 +16,7 @@ Server rendered stateful views where only a stream of DOM patches is sent to the
 
 ### Reconciliation
 - [x] Diffs for text content 
-- [ ] Diffs for node moves
+- [x] Diffs for node moves
 - [ ] Diffs for node attributes
 - [ ] Diffs for styles
 - [ ] Diffs for css classes
